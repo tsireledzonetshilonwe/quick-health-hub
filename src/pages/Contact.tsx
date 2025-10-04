@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Mail, Phone, MapPin, Clock, Send } from "lucide-react";
 import { toast } from "sonner";
+import { submitContact } from "@/lib/api";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -20,8 +21,15 @@ const Contact = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Message sent successfully! We'll get back to you soon.");
-    setFormData({ name: "", email: "", phone: "", subject: "", message: "" });
+    (async () => {
+      try {
+        await submitContact({ name: formData.name, email: formData.email, message: formData.message });
+        toast.success("Message sent successfully! We'll get back to you soon.");
+        setFormData({ name: "", email: "", phone: "", subject: "", message: "" });
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to send message");
+      }
+    })();
   };
 
   const contactInfo = [

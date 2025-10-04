@@ -6,59 +6,42 @@ import { Button } from "@/components/ui/button";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Pill, Calendar, User } from "lucide-react";
-
-interface Prescription {
-  id: string;
-  medication: string;
-  dosage: string;
-  frequency: string;
-  doctor: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-}
+import { getPrescriptions, PrescriptionDTO } from "@/lib/api";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const Prescriptions = () => {
   const navigate = useNavigate();
-  const [prescriptions] = useState<Prescription[]>([
-    {
-      id: "1",
-      medication: "Lisinopril",
-      dosage: "10mg",
-      frequency: "Once daily",
-      doctor: "Dr. Sarah Johnson",
-      startDate: "2025-09-01",
-      endDate: "2025-12-01",
-      status: "Active",
-    },
-    {
-      id: "2",
-      medication: "Metformin",
-      dosage: "500mg",
-      frequency: "Twice daily",
-      doctor: "Dr. Michael Chen",
-      startDate: "2025-08-15",
-      endDate: "2025-11-15",
-      status: "Active",
-    },
-    {
-      id: "3",
-      medication: "Amoxicillin",
-      dosage: "250mg",
-      frequency: "Three times daily",
-      doctor: "Dr. Emily Roberts",
-      startDate: "2025-09-20",
-      endDate: "2025-09-30",
-      status: "Completed",
-    },
-  ]);
+  const [prescriptions, setPrescriptions] = useState<PrescriptionDTO[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const { user } = useAuth();
 
   useEffect(() => {
-    const userId = localStorage.getItem("currentUserId");
-    if (!userId) {
+    if (!user) {
       navigate("/login");
+      return;
     }
-  }, [navigate]);
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const list = await getPrescriptions();
+        setPrescriptions(list);
+      } catch (err: any) {
+        if (err?.status === 401) {
+          toast.error("Session expired. Please sign in again.");
+          navigate("/login");
+        } else {
+          toast.error(err?.message || "Failed to load prescriptions");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [navigate, user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

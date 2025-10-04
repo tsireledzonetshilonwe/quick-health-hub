@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Calendar, FileText, Clock, Activity, Plus, Bell, User } from "lucide-react";
 import { toast } from "sonner";
+import { getAppointments, createAppointment, AppointmentDTO } from "@/lib/api";
+import { getDoctors, DoctorDTO } from "@/lib/api";
 
 interface Appointment {
   id: string;
@@ -30,42 +33,58 @@ const Dashboard = () => {
     date: "",
     time: "",
   });
+  const [doctors, setDoctors] = useState<DoctorDTO[]>([]);
+
+  const { user } = useAuth();
 
   useEffect(() => {
-    const userId = localStorage.getItem("currentUserId");
-    if (!userId) {
+    if (!user) {
       navigate("/login");
       return;
     }
 
-    // Load appointments from localStorage
-    const savedAppointments = localStorage.getItem("appointments");
-    if (savedAppointments) {
-      setAppointments(JSON.parse(savedAppointments));
-    } else {
-      // Demo appointments
-      const demoAppointments = [
-        {
-          id: "1",
-          doctor: "Dr. Sarah Johnson",
-          specialty: "Cardiology",
-          date: "2025-10-15",
-          time: "10:00 AM",
-          status: "Confirmed",
-        },
-        {
-          id: "2",
-          doctor: "Dr. Michael Chen",
-          specialty: "General Medicine",
-          date: "2025-10-20",
-          time: "2:30 PM",
-          status: "Pending",
-        },
-      ];
-      setAppointments(demoAppointments);
-      localStorage.setItem("appointments", JSON.stringify(demoAppointments));
-    }
-  }, [navigate]);
+    const load = async () => {
+      try {
+        const list = await getAppointments();
+        // map backend AppointmentDTO to local Appointment format
+        const mapped = list.map((a) => ({
+          id: a.id || "",
+          doctor: a.doctor,
+          specialty: a.specialty,
+          date: a.startTime.split("T")[0],
+          time: new Date(a.startTime).toLocaleTimeString(),
+          status: a.status || "",
+        }));
+        setAppointments(mapped);
+      } catch (err: any) {
+        // fallback to localStorage demo data
+        const savedAppointments = localStorage.getItem("appointments");
+        if (savedAppointments) {
+          setAppointments(JSON.parse(savedAppointments));
+        }
+      }
+    };
+
+    load();
+  }, [navigate, user]);
+
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const list = await getDoctors();
+        setDoctors(list);
+      } catch (e) {
+        // fallback list
+        setDoctors([
+          { id: "1", fullName: "Dr. Sarah Johnson", specialty: "Cardiology" },
+          { id: "2", fullName: "Dr. Michael Chen", specialty: "General Medicine" },
+          { id: "3", fullName: "Dr. Emily Roberts", specialty: "Pediatrics" },
+        ]);
+      }
+    };
+
+    loadDoctors();
+  }, []);
 
   const handleQuickBook = () => {
     if (!newAppointment.doctor || !newAppointment.specialty || !newAppointment.date || !newAppointment.time) {
@@ -73,22 +92,39 @@ const Dashboard = () => {
       return;
     }
 
-    const appointment: Appointment = {
-      id: Date.now().toString(),
-      ...newAppointment,
-      status: "Pending",
-    };
-
-    const updatedAppointments = [...appointments, appointment];
-    setAppointments(updatedAppointments);
-    localStorage.setItem("appointments", JSON.stringify(updatedAppointments));
-    
-    toast.success("Appointment booked successfully!");
-    setQuickBookOpen(false);
-    setNewAppointment({ doctor: "", specialty: "", date: "", time: "" });
+    (async () => {
+      try {
+        const dto: AppointmentDTO = {
+          doctor: newAppointment.doctor,
+          specialty: newAppointment.specialty,
+          startTime: new Date(`${newAppointment.date}T${newAppointment.time}`).toISOString(),
+          reason: "",
+        };
+        if ((import.meta.env as any).VITE_API_DEBUG) {
+          // eslint-disable-next-line no-console
+          console.debug("Creating appointment payload:", dto);
+        }
+        const saved = await createAppointment(dto);
+        const entry: Appointment = {
+          id: saved.id || Date.now().toString(),
+          doctor: saved.doctor,
+          specialty: saved.specialty,
+          date: saved.startTime.split("T")[0],
+          time: new Date(saved.startTime).toLocaleTimeString(),
+          status: saved.status || "Pending",
+        };
+        const updatedAppointments = [...appointments, entry];
+        setAppointments(updatedAppointments);
+        toast.success("Appointment booked successfully!");
+        setQuickBookOpen(false);
+        setNewAppointment({ doctor: "", specialty: "", date: "", time: "" });
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to book appointment");
+      }
+    })();
   };
 
-  const userName = localStorage.getItem("currentUserFullName") || "User";
+  const userName = user?.fullName || "User";
 
   const stats = [
     { label: "Appointments", value: appointments.length.toString(), icon: Calendar, color: "text-primary" },
@@ -151,12 +187,18 @@ const Dashboard = () => {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="doctor">Doctor</Label>
-                      <Input
-                        id="doctor"
-                        placeholder="Dr. Name"
-                        value={newAppointment.doctor}
-                        onChange={(e) => setNewAppointment({ ...newAppointment, doctor: e.target.value })}
-                      />
+                        <Select value={newAppointment.doctor} onValueChange={(val) => setNewAppointment({ ...newAppointment, doctor: val })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a doctor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {doctors.map((d) => (
+                              <SelectItem key={d.id || d.fullName} value={d.fullName}>
+                                {d.fullName} {d.specialty ? `— ${d.specialty}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="specialty">Specialty</Label>

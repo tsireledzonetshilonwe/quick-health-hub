@@ -6,37 +6,43 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Activity, Eye, EyeOff, Loader2 } from "lucide-react";
+import { login } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
   });
+
+  const { signIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem("users") || "[]");
-      const user = users.find(
-        (u: any) => u.username === formData.username && u.password === formData.password
-      );
-
-      if (user) {
-        localStorage.setItem("currentUserId", user.id);
-        localStorage.setItem("currentUserFullName", user.name);
-        toast.success("Login successful! Welcome back.");
-        navigate("/dashboard");
-      } else {
-        toast.error("Invalid username or password");
+    try {
+      // Use signIn so token and user state are centralized
+      const email = formData.email.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        toast.error("Please enter a valid email address");
+        setLoading(false);
+        return;
       }
+      await signIn(email, formData.password);
+      toast.success("Login successful! Redirecting...");
+      navigate("/dashboard");
+    } catch (err: any) {
+      if (err?.status === 401) {
+        toast.error("Invalid email or password");
+      } else {
+        toast.error(err?.message || "Login failed");
+      }
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -55,14 +61,15 @@ const Login = () => {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                placeholder="Enter your username"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                required
-              />
+              <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                />
             </div>
 
             <div className="space-y-2">

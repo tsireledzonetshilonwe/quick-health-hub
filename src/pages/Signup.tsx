@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Activity, Eye, EyeOff, Loader2 } from "lucide-react";
+import { signup } from "@/lib/api";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -34,31 +35,20 @@ const Signup = () => {
     }
 
     setLoading(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem("users") || "[]");
-      
-      if (users.find((u: any) => u.username === formData.username)) {
-        toast.error("Username already exists");
-        setLoading(false);
-        return;
-      }
-
-      const newUser = {
-        id: Date.now().toString(),
-        username: formData.username,
+    try {
+      await signup({
         email: formData.email,
-        name: formData.name,
-        phone: formData.phone,
         password: formData.password,
-      };
-
-      users.push(newUser);
-      localStorage.setItem("users", JSON.stringify(users));
-      toast.success("Account created successfully!");
+        fullName: formData.name,
+        phone: formData.phone,
+      });
+      toast.success("Account created successfully! Please sign in.");
       navigate("/login");
-    }, 1000);
+    } catch (err: any) {
+      toast.error(err?.message || "Signup failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

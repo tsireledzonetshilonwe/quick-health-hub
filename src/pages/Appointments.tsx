@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Calendar, Clock, MapPin, Phone } from "lucide-react";
+import { getAppointments } from "@/lib/api";
 
 interface Appointment {
   id: string;
@@ -18,20 +20,35 @@ interface Appointment {
 
 const Appointments = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    const userId = localStorage.getItem("currentUserId");
-    if (!userId) {
+    if (!user) {
       navigate("/login");
       return;
     }
 
-    const savedAppointments = localStorage.getItem("appointments");
-    if (savedAppointments) {
-      setAppointments(JSON.parse(savedAppointments));
-    }
-  }, [navigate]);
+    const load = async () => {
+      try {
+        const list = await getAppointments();
+        const mapped = list.map((a) => ({
+          id: a.id || "",
+          doctor: a.doctor,
+          specialty: a.specialty,
+          date: a.startTime.split("T")[0],
+          time: new Date(a.startTime).toLocaleTimeString(),
+          status: a.status || "",
+        }));
+        setAppointments(mapped);
+      } catch (e) {
+        const savedAppointments = localStorage.getItem("appointments");
+        if (savedAppointments) setAppointments(JSON.parse(savedAppointments));
+      }
+    };
+
+    load();
+  }, [navigate, user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

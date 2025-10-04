@@ -1,16 +1,24 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Menu, X, Activity } from "lucide-react";
+import { Menu, X, Activity, User } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./ui/dropdown-menu";
+import { useAuth } from "@/hooks/useAuth";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const currentUser = localStorage.getItem("currentUserId");
+  const { user, signOut } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("currentUserId");
-    localStorage.removeItem("currentUserFullName");
+    signOut();
     navigate("/");
   };
 
@@ -41,14 +49,36 @@ const Header = () => {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          {currentUser ? (
+          {user ? (
             <>
               <Button variant="ghost" asChild>
                 <Link to="/dashboard">Dashboard</Link>
               </Button>
-              <Button variant="outline" onClick={handleLogout}>
-                Logout
-              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="px-1">
+                    <Avatar>
+                      {((user as any).avatar) ? (
+                        <AvatarImage src={(user as any).avatar} alt={user.fullName || "User"} />
+                      ) : (
+                        <AvatarImage src="/placeholder.svg" alt={user.fullName || "User"} />
+                      )}
+                      <AvatarFallback>{(user.fullName || "U").slice(0, 1)}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile">Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/dashboard">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={handleLogout}>Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             <>
@@ -87,7 +117,7 @@ const Header = () => {
             Contact
           </Link>
           <div className="pt-3 space-y-2">
-            {currentUser ? (
+            {user ? (
               <>
                 <Button variant="ghost" className="w-full" asChild>
                   <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
