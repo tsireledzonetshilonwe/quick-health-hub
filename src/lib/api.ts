@@ -17,6 +17,7 @@ type LoginPayload = {
 type AuthResponse = {
   accessToken: string;
   expiresIn: number; // seconds
+  user?: UserProfileDTO;
 };
 
 async function request(path: string, options: RequestInit = {}) {
@@ -31,6 +32,8 @@ async function request(path: string, options: RequestInit = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
+    // include cookies for server-side session authentication
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...headers,
@@ -205,4 +208,26 @@ export async function getProfile() {
 
 export async function updateProfile(dto: UserProfileDTO) {
   return request(`/api/auth/me`, { method: "PUT", body: JSON.stringify(dto) }) as Promise<UserProfileDTO>;
+}
+
+// Upload avatar (multipart/form-data)
+export async function uploadAvatar(file: File) {
+  const token = localStorage.getItem("accessToken");
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(`${API_BASE}/api/auth/me/avatar`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    const err: any = new Error(text || res.statusText);
+    err.status = res.status;
+    throw err;
+  }
+
+  return (await res.json()) as { url: string };
 }

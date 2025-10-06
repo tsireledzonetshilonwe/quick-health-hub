@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { getProfile, UserProfileDTO } from "@/lib/api";
+import { getProfile, UserProfileDTO, uploadAvatar } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -17,6 +17,7 @@ const Profile = () => {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<UserProfileDTO>({ fullName: user?.fullName, email: user?.email, phone: "" });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -47,13 +48,26 @@ const Profile = () => {
     }
   };
 
-  const handleAvatarPick = (file?: File) => {
+  const handleAvatarPick = async (file?: File) => {
     if (!file) return;
+    // show an immediate preview (optional)
     const reader = new FileReader();
     reader.onload = () => {
       setProfile((p) => ({ ...(p || {}), avatar: reader.result as string }));
     };
     reader.readAsDataURL(file);
+
+    // upload the file to the backend and replace avatar with returned URL
+    setUploading(true);
+    try {
+      const res = await uploadAvatar(file);
+      setProfile((p) => ({ ...(p || {}), avatar: res.url }));
+      toast.success("Avatar uploaded");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to upload avatar");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const triggerFile = () => fileRef.current?.click();

@@ -55,14 +55,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     const res = await apiLogin({ email, password });
-    setAccessToken(res.accessToken);
-    // try to load profile after login
+    // persist token synchronously so subsequent API calls (getProfile) include Authorization
     try {
-      const profile = await getProfile();
-      setUser({ fullName: profile.fullName, email: profile.email, id: profile.id });
+      localStorage.setItem("accessToken", res.accessToken);
     } catch (e) {
-      setUser({ fullName: email });
+      // ignore
     }
+    setAccessToken(res.accessToken);
+    // If server returned a user in the login response, use it immediately.
+    if ((res as any).user) {
+      const u = (res as any).user as UserProfileDTO;
+      setUser({ fullName: u.fullName, email: u.email, id: u.id, phone: u.phone } as any);
+      return;
+    }
+
+    // Otherwise set a minimal fallback and try to load a richer profile in the background
+    setUser({ fullName: email, email });
+    (async () => {
+      try {
+        const profile = await getProfile();
+        setUser({ fullName: profile.fullName, email: profile.email, id: profile.id, phone: profile.phone } as any);
+      } catch (e) {
+        // keep fallback
+      }
+    })();
   };
 
   const refreshProfile = async () => {
