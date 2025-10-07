@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { login as apiLogin, getProfile, updateProfile as apiUpdateProfile, UserProfileDTO } from "@/lib/api";
+import { login as apiLogin, getProfile, updateProfile as apiUpdateProfile, UserProfileDTO, ProfileUpdateDTO } from "@/lib/api";
 
 type User = {
   id?: string;
@@ -13,7 +13,8 @@ type AuthContextValue = {
   accessToken: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
-  updateProfile: (p: UserProfileDTO) => Promise<void>;
+  updateProfile: (p: ProfileUpdateDTO) => Promise<void>;
+  initialized: boolean;
   signOut: () => void;
 };
 
@@ -31,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return name ? { fullName: name } : null;
   });
   const [accessToken, setAccessToken] = useState<string | null>(() => localStorage.getItem("accessToken"));
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (accessToken) {
@@ -90,15 +92,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateProfile = async (p: UserProfileDTO) => {
+  const updateProfile = async (p: ProfileUpdateDTO) => {
     try {
       const updated = await apiUpdateProfile(p);
       setUser({ fullName: updated.fullName, email: updated.email, id: updated.id, phone: updated.phone });
     } catch (e) {
       // fallback to local persistence if backend isn't available
-      setUser((prev) => ({ ...(prev || {}), fullName: p.fullName, email: p.email, phone: p.phone, avatar: p.avatar }));
+      setUser((prev) => ({ ...(prev || {}), fullName: p.fullName, phone: p.phone }));
       try {
-        localStorage.setItem("currentUserProfile", JSON.stringify({ ...(user || {}), fullName: p.fullName, email: p.email, phone: p.phone, avatar: p.avatar }));
+        localStorage.setItem("currentUserProfile", JSON.stringify({ ...(user || {}), fullName: p.fullName, phone: p.phone }));
       } catch (er) {
         // ignore
       }
@@ -110,8 +112,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  // Try to initialize user from session cookie/profile on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const profile = await getProfile();
+        if (profile) setUser({ fullName: profile.fullName, email: profile.email, id: profile.id, phone: profile.phone } as any);
+      } catch (e) {
+        // ignore; user will remain null
+      } finally {
+        setInitialized(true);
+      }
+    })();
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, accessToken, signIn, signOut, refreshProfile, updateProfile }}>
+    <AuthContext.Provider value={{ user, accessToken, signIn, signOut, refreshProfile, updateProfile, initialized }}>
       {children}
     </AuthContext.Provider>
   );

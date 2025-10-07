@@ -20,10 +20,11 @@ interface Appointment {
 
 const Appointments = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, initialized } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
+    if (!initialized) return;
     if (!user) {
       navigate("/login");
       return;

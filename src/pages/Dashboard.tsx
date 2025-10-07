@@ -28,16 +28,17 @@ const Dashboard = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [quickBookOpen, setQuickBookOpen] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
-    doctor: "",
+    doctorId: "",
     specialty: "",
     date: "",
     time: "",
   });
   const [doctors, setDoctors] = useState<DoctorDTO[]>([]);
 
-  const { user } = useAuth();
+  const { user, initialized } = useAuth();
 
   useEffect(() => {
+    if (!initialized) return;
     if (!user) {
       navigate("/login");
       return;
@@ -87,15 +88,16 @@ const Dashboard = () => {
   }, []);
 
   const handleQuickBook = () => {
-    if (!newAppointment.doctor || !newAppointment.specialty || !newAppointment.date || !newAppointment.time) {
+    if (!newAppointment.doctorId || !newAppointment.specialty || !newAppointment.date || !newAppointment.time) {
       toast.error("Please fill in all fields");
       return;
     }
 
     (async () => {
       try {
+        const selectedDoctor = doctors.find(d => d.id === newAppointment.doctorId) || null;
         const dto: AppointmentDTO = {
-          doctor: newAppointment.doctor,
+          doctor: selectedDoctor?.fullName || newAppointment.doctorId || "",
           specialty: newAppointment.specialty,
           startTime: new Date(`${newAppointment.date}T${newAppointment.time}`).toISOString(),
           reason: "",
@@ -117,7 +119,7 @@ const Dashboard = () => {
         setAppointments(updatedAppointments);
         toast.success("Appointment booked successfully!");
         setQuickBookOpen(false);
-        setNewAppointment({ doctor: "", specialty: "", date: "", time: "" });
+  setNewAppointment({ doctorId: "", specialty: "", date: "", time: "" });
       } catch (err: any) {
         toast.error(err?.message || "Failed to book appointment");
       }
@@ -187,13 +189,13 @@ const Dashboard = () => {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="doctor">Doctor</Label>
-                        <Select value={newAppointment.doctor} onValueChange={(val) => setNewAppointment({ ...newAppointment, doctor: val })}>
+                        <Select value={newAppointment.doctorId} onValueChange={(val) => setNewAppointment({ ...newAppointment, doctorId: val })}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select a doctor" />
                           </SelectTrigger>
                           <SelectContent>
                             {doctors.map((d) => (
-                              <SelectItem key={d.id || d.fullName} value={d.fullName}>
+                              <SelectItem key={d.id || d.fullName} value={d.id || d.fullName}>
                                 {d.fullName} {d.specialty ? `— ${d.specialty}` : ""}
                               </SelectItem>
                             ))}

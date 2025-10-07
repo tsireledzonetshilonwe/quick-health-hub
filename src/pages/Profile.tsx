@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const Profile = () => {
-  const { user, refreshProfile, updateProfile } = useAuth();
+  const { user, refreshProfile, updateProfile, initialized } = useAuth();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<UserProfileDTO>({ fullName: user?.fullName, email: user?.email, phone: "" });
@@ -21,6 +21,7 @@ const Profile = () => {
 
   useEffect(() => {
     (async () => {
+      if (!initialized) return;
       if (!user) {
         navigate("/login");
         return;
@@ -38,7 +39,7 @@ const Profile = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateProfile(profile);
+      await updateProfile({ fullName: profile.fullName || "", phone: profile.phone });
       toast.success("Profile updated");
       await refreshProfile();
     } catch (e: any) {
