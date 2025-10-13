@@ -57,17 +57,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     const res = await apiLogin({ email, password });
-    // persist token synchronously so subsequent API calls (getProfile) include Authorization
-    try {
-      localStorage.setItem("accessToken", res.accessToken);
-    } catch (e) {
-      // ignore
+
+    // Try to detect a token in common fields (accessToken, token, id_token)
+    const anyRes = res as any;
+    const token = anyRes?.accessToken ?? anyRes?.token ?? anyRes?.id_token ?? (anyRes?.data && (anyRes.data.accessToken ?? anyRes.data.token));
+    if (token) {
+      try {
+        localStorage.setItem("accessToken", token);
+      } catch (e) {
+        // ignore
+      }
+      setAccessToken(token);
     }
-    setAccessToken(res.accessToken);
+
     // If server returned a user in the login response, use it immediately.
-    if ((res as any).user) {
-      const u = (res as any).user as UserProfileDTO;
-      setUser({ fullName: u.fullName, email: u.email, id: u.id, phone: u.phone } as any);
+    // Some backends return { user: { ... } }, others return the user object directly.
+    const userObj: UserProfileDTO | undefined = anyRes?.user ?? (anyRes && (anyRes.id || anyRes.email) ? anyRes : undefined);
+    if (userObj) {
+      setUser({ fullName: userObj.fullName, email: userObj.email, id: userObj.id, phone: userObj.phone } as any);
+      try {
+        if (!localStorage.getItem("currentUserProfile")) {
+          localStorage.setItem("currentUserProfile", JSON.stringify(userObj));
+        }
+      } catch (e) {
+        // ignore
+      }
       return;
     }
 
