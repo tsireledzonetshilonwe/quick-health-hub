@@ -122,6 +122,10 @@ export async function getAppointments(userId?: number) {
   return request(`/api/appointments${q}`, { method: "GET" }) as Promise<AppointmentDTO[]>;
 }
 
+export async function getAppointment(id: number): Promise<AppointmentDTO> {
+  return request(`/api/appointments/${id}`, { method: "GET" }) as Promise<AppointmentDTO>;
+}
+
 export async function createAppointment(dto: AppointmentCreateDTO) {
   return request(`/api/appointments`, { method: "POST", body: JSON.stringify(dto) }) as Promise<AppointmentDTO>;
 }
@@ -132,6 +136,32 @@ export async function updateAppointment(id: number, dto: AppointmentDTO) {
 
 export async function deleteAppointment(id: number) {
   await request(`/api/appointments/${id}`, { method: "DELETE" });
+}
+
+// Users (admin and self endpoints)
+export async function getUsers() {
+  return request(`/api/users`, { method: "GET" }) as Promise<UserDTO[]>;
+}
+
+export async function getUser(id: number) {
+  return request(`/api/users/${id}`, { method: "GET" }) as Promise<UserDTO>;
+}
+
+export async function createUser(u: UserDTO) {
+  return request(`/api/users`, { method: "POST", body: JSON.stringify(u) }) as Promise<UserDTO>;
+}
+
+export async function updateUser(id: number, u: Partial<UserDTO>) {
+  return request(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(u) }) as Promise<UserDTO>;
+}
+
+export async function deleteUser(id: number) {
+  await request(`/api/users/${id}`, { method: "DELETE" });
+}
+
+// Update current authenticated user's own profile
+export async function updateMe(payload: Partial<UserDTO>) {
+  return request(`/api/users/me`, { method: "PUT", body: JSON.stringify(payload) }) as Promise<UserDTO>;
 }
 
 // Contact

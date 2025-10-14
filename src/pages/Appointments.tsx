@@ -4,17 +4,22 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Calendar, Clock, MapPin, Phone } from "lucide-react";
-import { getAppointments } from "@/lib/api";
+import { getAppointments, updateAppointment, getAppointment } from "@/lib/api";
+import { toast } from "sonner";
 
 interface Appointment {
-  id: string;
+  id: string | number;
   doctor: string;
   specialty: string;
   date: string;
   time: string;
+  rawStartTime?: string;
   status: string;
 }
 
@@ -22,6 +27,11 @@ const Appointments = () => {
   const navigate = useNavigate();
   const { user, initialized } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [rescheduling, setRescheduling] = useState(false);
 
   useEffect(() => {
     if (!initialized) return;
@@ -37,8 +47,9 @@ const Appointments = () => {
           id: a.id || "",
           doctor: a.doctor,
           specialty: a.specialty,
-          date: a.startTime.split("T")[0],
-          time: new Date(a.startTime).toLocaleTimeString(),
+              date: a.startTime.split("T")[0],
+              time: new Date(a.startTime).toLocaleTimeString(),
+              rawStartTime: a.startTime,
           status: a.status || "",
         }));
         setAppointments(mapped);
@@ -127,8 +138,30 @@ const Appointments = () => {
                     <Phone className="h-4 w-4 text-muted-foreground" />
                     <span>+1 (555) 123-4567</span>
                   </div>
-                  <div className="pt-4 flex gap-2">
-                    <Button variant="outline" className="flex-1">Reschedule</Button>
+                      <div className="pt-4 flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        // open reschedule dialog prefilled with current date/time using rawStartTime
+                        setSelectedAppt(appointment);
+                        try {
+                          const dt = new Date(appointment.rawStartTime || `${appointment.date}T00:00:00Z`);
+                          // date input expects yyyy-mm-dd
+                          const isoDate = dt.toISOString().split('T')[0];
+                          // time input expects HH:MM
+                          const hhmm = dt.toISOString().split('T')[1].slice(0,5);
+                          setNewDate(isoDate);
+                          setNewTime(hhmm);
+                        } catch (e) {
+                          setNewDate("");
+                          setNewTime("");
+                        }
+                        setRescheduleOpen(true);
+                      }}
+                    >
+                      Reschedule
+                    </Button>
                     <Button variant="destructive" className="flex-1">Cancel</Button>
                   </div>
                 </CardContent>
@@ -136,6 +169,66 @@ const Appointments = () => {
             ))}
           </div>
         )}
+        {/* Reschedule Dialog */}
+        <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reschedule Appointment</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div>
+                <Label htmlFor="resched-date">New date</Label>
+                <Input id="resched-date" type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="resched-time">New time</Label>
+                <Input id="resched-time" type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRescheduleOpen(false)}>Cancel</Button>
+              <Button
+                type="button"
+                disabled={rescheduling}
+                onClick={async () => {
+                  if (!selectedAppt) return toast.error('No appointment selected');
+                  if (!newDate || !newTime) return toast.error('Please provide a date and time'); // validation
+                  setRescheduling(true);
+                  try {
+                    const iso = new Date(`${newDate}T${newTime}`).toISOString();
+                    // fetch current appointment to preserve required fields such as status
+                    const existing = await getAppointment(Number(selectedAppt.id));
+                    const dto = {
+                      ...existing,
+                      startTime: iso,
+                    } as any;
+                    const saved = await updateAppointment(Number(selectedAppt.id), dto);
+                    // update local list
+                    setAppointments((prev) => prev.map((a) => a.id === selectedAppt.id ? ({
+                      ...a,
+                      date: saved.startTime.split('T')[0],
+                      time: new Date(saved.startTime).toLocaleTimeString(),
+                      rawStartTime: saved.startTime,
+                    }) : a));
+                    setRescheduleOpen(false);
+                    setSelectedAppt(null);
+                    setNewDate("");
+                    setNewTime("");
+                    toast.success('Appointment rescheduled');
+                  } catch (err: any) {
+                    // eslint-disable-next-line no-console
+                    console.error(err);
+                    toast.error(err?.message || 'Failed to reschedule');
+                  } finally {
+                    setRescheduling(false);
+                  }
+                }}
+              >
+                {rescheduling ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
 
       <Footer />
