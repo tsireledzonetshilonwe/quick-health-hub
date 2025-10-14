@@ -36,16 +36,32 @@ const Signup = () => {
 
     setLoading(true);
     try {
-      await signup({
-        email: formData.email,
+      // normalize/trim email to avoid accidental duplicates (case differences)
+      const email = (formData.email || "").trim().toLowerCase();
+      const payload: any = {
+        email,
         password: formData.password,
-        fullName: formData.name,
-        phone: formData.phone,
-      });
+        fullName: formData.name?.trim(),
+        phone: formData.phone?.trim(),
+      };
+      // include username only if provided (backend doesn't require it but it's harmless)
+      if (formData.username && formData.username.trim()) payload.username = formData.username.trim();
+
+      await signup(payload);
       toast.success("Account created successfully! Please sign in.");
       navigate("/login");
     } catch (err: any) {
-      toast.error(err?.message || "Signup failed");
+      // try to parse structured server error messages
+      if (err && typeof err === "object" && err.message) {
+        toast.error(err.message);
+      } else {
+        try {
+          const j = JSON.parse(String(err));
+          toast.error(j?.message || j?.error || "Signup failed");
+        } catch {
+          toast.error(String(err) || "Signup failed");
+        }
+      }
     } finally {
       setLoading(false);
     }

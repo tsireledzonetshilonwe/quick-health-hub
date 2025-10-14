@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Pill, Calendar, User } from "lucide-react";
-import { getPrescriptions, PrescriptionDTO, getProfile } from "@/lib/api";
+import { getPrescriptions, PrescriptionDTO, getPrescription, API_BASE } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -22,18 +22,7 @@ const Prescriptions = () => {
     setLoading(true);
     setError(null);
     try {
-      // ensure profile/session is available; backend endpoints require an authenticated principal
-      try {
-        await getProfile();
-      } catch (e: any) {
-        // If getting profile fails, don't automatically redirect — show an action so user can sign in.
-        if (e?.status === 401 || e?.status === 404) {
-          setError("You need to sign in to view prescriptions. Click Sign in to continue.");
-          return;
-        }
-        // ignore other profile retrieval errors and continue to try fetching prescriptions
-      }
-
+      // fetch prescriptions directly; backend will return 401 if unauthenticated
       const list = await getPrescriptions();
       setPrescriptions(list);
     } catch (err: any) {
@@ -152,7 +141,62 @@ const Prescriptions = () => {
                         </div>
                       </div>
                       <div className="mt-6 flex gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            const id = prescription.id as number | undefined;
+                            if (!id) return toast.error("Missing prescription id");
+                            try {
+                              // Try to download a file from the backend first
+                              const resp = await fetch(`${API_BASE}/api/prescriptions/${id}/download`, {
+                                method: "GET",
+                                credentials: "include",
+                              });
+                              if (resp.ok) {
+                                const ct = resp.headers.get("content-type") || "application/octet-stream";
+                                const blob = await resp.blob();
+                                // try to get filename from content-disposition
+                                const cd = resp.headers.get("content-disposition") || "";
+                                let filename = `prescription-${id}`;
+                                const m = cd.match(/filename\*=UTF-8''([^;\n\r]+)/) || cd.match(/filename="?([^";]+)"?/);
+                                if (m && m[1]) filename = decodeURIComponent(m[1]);
+                                if (!filename.includes('.')) filename += ct.includes('pdf') ? '.pdf' : '.bin';
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                URL.revokeObjectURL(url);
+                                toast.success('Download started');
+                                return;
+                              }
+                              // if not found or not ok, fall through to JSON fallback
+                            } catch (err) {
+                              // ignore and try JSON fallback
+                            }
+
+                            // Fallback: fetch the prescription JSON and save as text file
+                            try {
+                              const pres = await getPrescription(prescription.id as number);
+                              const text = `Prescription #${pres.id}\nMedication: ${pres.medication}\nDosage: ${pres.dosage}\nInstructions: ${pres.instructions || ''}\nIssued: ${pres.issuedAt}\nExpires: ${pres.expiresAt || '—'}\nStatus: ${pres.status || ''}\n`;
+                              const blob = new Blob([text], { type: 'text/plain' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `prescription-${pres.id}.txt`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              URL.revokeObjectURL(url);
+                              toast.success('Prescription downloaded');
+                            } catch (err: any) {
+                              toast.error(err?.message || 'Failed to download prescription');
+                            }
+                          }}
+                        >
                           Download
                         </Button>
                         <Button variant="outline" size="sm">

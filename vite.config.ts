@@ -12,13 +12,23 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: "::",
-      port: 8080,
+      port: 5173,
       proxy: {
         // proxy all /api requests to the backend server during development
         "/api": {
           target: backend,
           changeOrigin: true,
           secure: false,
+          // strip the browser's Origin header so the backend doesn't treat proxied requests as cross-origin
+          configure: (proxy) => {
+            proxy.on("proxyReq", (proxyReq, req, res) => {
+              try {
+                proxyReq.removeHeader("origin");
+              } catch (e) {
+                // ignore
+              }
+            });
+          },
         },
       },
     },

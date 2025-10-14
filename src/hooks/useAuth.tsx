@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { login as apiLogin, getProfile, updateProfile as apiUpdateProfile, UserProfileDTO, ProfileUpdateDTO } from "@/lib/api";
+import { login as apiLogin, UserDTO } from "@/lib/api";
 
 type User = {
-  id?: string;
+  id?: number;
   fullName?: string;
   email?: string;
   phone?: string;
@@ -10,10 +10,9 @@ type User = {
 
 type AuthContextValue = {
   user: User | null;
-  accessToken: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
-  updateProfile: (p: ProfileUpdateDTO) => Promise<void>;
+  updateProfile: (p: { fullName: string; phone?: string }) => Promise<void>;
   initialized: boolean;
   signOut: () => void;
 };
@@ -31,16 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const name = localStorage.getItem("currentUserFullName");
     return name ? { fullName: name } : null;
   });
-  const [accessToken, setAccessToken] = useState<string | null>(() => localStorage.getItem("accessToken"));
   const [initialized, setInitialized] = useState(false);
-
-  useEffect(() => {
-    if (accessToken) {
-      localStorage.setItem("accessToken", accessToken);
-    } else {
-      localStorage.removeItem("accessToken");
-    }
-  }, [accessToken]);
 
   useEffect(() => {
     if (user) {
@@ -57,22 +47,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     const res = await apiLogin({ email, password });
-
-    // Try to detect a token in common fields (accessToken, token, id_token)
     const anyRes = res as any;
-    const token = anyRes?.accessToken ?? anyRes?.token ?? anyRes?.id_token ?? (anyRes?.data && (anyRes.data.accessToken ?? anyRes.data.token));
-    if (token) {
-      try {
-        localStorage.setItem("accessToken", token);
-      } catch (e) {
-        // ignore
-      }
-      setAccessToken(token);
-    }
 
-    // If server returned a user in the login response, use it immediately.
-    // Some backends return { user: { ... } }, others return the user object directly.
-    const userObj: UserProfileDTO | undefined = anyRes?.user ?? (anyRes && (anyRes.id || anyRes.email) ? anyRes : undefined);
+    // If server returned a user in the login response, use it.
+    const userObj: UserDTO | undefined = anyRes?.user ?? (anyRes && (anyRes.id || anyRes.email) ? anyRes : undefined);
     if (userObj) {
       setUser({ fullName: userObj.fullName, email: userObj.email, id: userObj.id, phone: userObj.phone } as any);
       try {
@@ -85,63 +63,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Otherwise set a minimal fallback and try to load a richer profile in the background
+    // Otherwise set a minimal fallback
     setUser({ fullName: email, email });
-    (async () => {
-      try {
-        const profile = await getProfile();
-        setUser({ fullName: profile.fullName, email: profile.email, id: profile.id, phone: profile.phone } as any);
-      } catch (e) {
-        // keep fallback
-      }
-    })();
   };
 
   const refreshProfile = async () => {
-    try {
-      const profile = await getProfile();
-      setUser({ fullName: profile.fullName, email: profile.email, id: profile.id });
-    } catch (e) {
-      // fallback: keep stored user
-    }
+    // Backend doesn't provide an authenticated profile endpoint; nothing to do here.
+    return Promise.resolve();
   };
 
-  const updateProfile = async (p: ProfileUpdateDTO) => {
+  const updateProfile = async (p: { fullName: string; phone?: string }) => {
+    // Backend doesn't provide profile updates; persist locally until server supports it.
+    setUser((prev) => ({ ...(prev || {}), fullName: p.fullName, phone: p.phone }));
     try {
-      const updated = await apiUpdateProfile(p);
-      setUser({ fullName: updated.fullName, email: updated.email, id: updated.id, phone: updated.phone });
-    } catch (e) {
-      // fallback to local persistence if backend isn't available
-      setUser((prev) => ({ ...(prev || {}), fullName: p.fullName, phone: p.phone }));
-      try {
-        localStorage.setItem("currentUserProfile", JSON.stringify({ ...(user || {}), fullName: p.fullName, phone: p.phone }));
-      } catch (er) {
-        // ignore
-      }
+      localStorage.setItem("currentUserProfile", JSON.stringify({ ...(user || {}), fullName: p.fullName, phone: p.phone }));
+    } catch (er) {
+      // ignore
     }
+    return Promise.resolve();
   };
 
   const signOut = () => {
-    setAccessToken(null);
+    setUser(null);
     setUser(null);
   };
 
-  // Try to initialize user from session cookie/profile on mount
+  // Initialize auth state from localStorage only
   useEffect(() => {
-    (async () => {
-      try {
-        const profile = await getProfile();
-        if (profile) setUser({ fullName: profile.fullName, email: profile.email, id: profile.id, phone: profile.phone } as any);
-      } catch (e) {
-        // ignore; user will remain null
-      } finally {
-        setInitialized(true);
-      }
-    })();
+    setInitialized(true);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, signIn, signOut, refreshProfile, updateProfile, initialized }}>
+    <AuthContext.Provider value={{ user, signIn, signOut, refreshProfile, updateProfile, initialized }}>
       {children}
     </AuthContext.Provider>
   );

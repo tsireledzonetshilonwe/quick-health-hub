@@ -11,11 +11,10 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Calendar, FileText, Clock, Activity, Plus, Bell, User } from "lucide-react";
 import { toast } from "sonner";
-import { getAppointments, createAppointment, AppointmentDTO } from "@/lib/api";
-import { getDoctors, DoctorDTO } from "@/lib/api";
+import { getAppointments, createAppointment, AppointmentDTO, getPrescriptions, PrescriptionDTO } from "@/lib/api";
 
 interface Appointment {
-  id: string;
+  id: string | number;
   doctor: string;
   specialty: string;
   date: string;
@@ -26,14 +25,14 @@ interface Appointment {
 const Dashboard = () => {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [activities, setActivities] = useState<{ text: string; time: string; ts: number }[]>([]);
   const [quickBookOpen, setQuickBookOpen] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
-    doctorId: "",
+    doctorName: "",
     specialty: "",
     date: "",
     time: "",
   });
-  const [doctors, setDoctors] = useState<DoctorDTO[]>([]);
 
   const { user, initialized } = useAuth();
 
@@ -46,7 +45,7 @@ const Dashboard = () => {
 
     const load = async () => {
       try {
-        const list = await getAppointments();
+        const [list, prescs] = await Promise.all([getAppointments(), getPrescriptions()]);
         // map backend AppointmentDTO to local Appointment format
         const mapped = list.map((a) => ({
           id: a.id || "",
@@ -57,6 +56,38 @@ const Dashboard = () => {
           status: a.status || "",
         }));
         setAppointments(mapped);
+
+        // Build recent activity from appointments + prescriptions
+        const act: { text: string; time: string; ts: number }[] = [];
+        const timeAgo = (d: Date) => {
+          const s = Math.floor((Date.now() - d.getTime()) / 1000);
+          if (s < 60) return `${s}s ago`;
+          const m = Math.floor(s / 60);
+          if (m < 60) return `${m}m ago`;
+          const h = Math.floor(m / 60);
+          if (h < 24) return `${h}h ago`;
+          const days = Math.floor(h / 24);
+          return `${days}d ago`;
+        };
+
+        for (const a of list) {
+          if (!a.startTime) continue;
+          const d = new Date(a.startTime);
+          const text = `${a.status || "Appointment"} with ${a.doctor || "Provider"}`;
+          act.push({ text, time: timeAgo(d), ts: d.getTime() });
+        }
+
+        for (const p of prescs) {
+          // prescriptions may have issuedAt
+          const issued = p.issuedAt ? new Date(p.issuedAt) : null;
+          const ts = issued ? issued.getTime() : Date.now();
+          const text = `Prescription: ${p.medication}`;
+          act.push({ text, time: issued ? timeAgo(issued) : "just now", ts });
+        }
+
+        // sort by timestamp desc and trim to recent 6
+        act.sort((a, b) => b.ts - a.ts);
+        setActivities(act.slice(0, 6));
       } catch (err: any) {
         // fallback to localStorage demo data
         const savedAppointments = localStorage.getItem("appointments");
@@ -69,35 +100,19 @@ const Dashboard = () => {
     load();
   }, [navigate, user]);
 
-  useEffect(() => {
-    const loadDoctors = async () => {
-      try {
-        const list = await getDoctors();
-        setDoctors(list);
-      } catch (e) {
-        // fallback list
-        setDoctors([
-          { id: "1", fullName: "Dr. Sarah Johnson", specialty: "Cardiology" },
-          { id: "2", fullName: "Dr. Michael Chen", specialty: "General Medicine" },
-          { id: "3", fullName: "Dr. Emily Roberts", specialty: "Pediatrics" },
-        ]);
-      }
-    };
-
-    loadDoctors();
-  }, []);
+  // No remote doctors list — backend doesn't provide /api/doctors
 
   const handleQuickBook = () => {
-    if (!newAppointment.doctorId || !newAppointment.specialty || !newAppointment.date || !newAppointment.time) {
+    if (!newAppointment.doctorName || !newAppointment.specialty || !newAppointment.date || !newAppointment.time) {
       toast.error("Please fill in all fields");
       return;
     }
 
     (async () => {
       try {
-        const selectedDoctor = doctors.find(d => d.id === newAppointment.doctorId) || null;
         const dto: AppointmentDTO = {
-          doctor: selectedDoctor?.fullName || newAppointment.doctorId || "",
+          userId: (user as any)?.id || 0,
+          doctor: newAppointment.doctorName,
           specialty: newAppointment.specialty,
           startTime: new Date(`${newAppointment.date}T${newAppointment.time}`).toISOString(),
           reason: "",
@@ -119,7 +134,7 @@ const Dashboard = () => {
         setAppointments(updatedAppointments);
         toast.success("Appointment booked successfully!");
         setQuickBookOpen(false);
-  setNewAppointment({ doctorId: "", specialty: "", date: "", time: "" });
+  setNewAppointment({ doctorName: "", specialty: "", date: "", time: "" });
       } catch (err: any) {
         toast.error(err?.message || "Failed to book appointment");
       }
@@ -188,19 +203,8 @@ const Dashboard = () => {
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="doctor">Doctor</Label>
-                        <Select value={newAppointment.doctorId} onValueChange={(val) => setNewAppointment({ ...newAppointment, doctorId: val })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a doctor" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {doctors.map((d) => (
-                              <SelectItem key={d.id || d.fullName} value={d.id || d.fullName}>
-                                {d.fullName} {d.specialty ? `— ${d.specialty}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="doctor">Doctor</Label>
+                        <Input id="doctor" value={newAppointment.doctorName} onChange={(e) => setNewAppointment({ ...newAppointment, doctorName: e.target.value })} placeholder="Doctor name (e.g. Dr. Smith)" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="specialty">Specialty</Label>
@@ -320,19 +324,19 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {[
-                  { text: "Appointment confirmed with Dr. Johnson", time: "2 hours ago" },
-                  { text: "Prescription renewed for Blood Pressure", time: "1 day ago" },
-                  { text: "Lab results uploaded", time: "3 days ago" },
-                ].map((activity, index) => (
-                  <div key={index} className="flex items-start gap-3">
-                    <Bell className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm">{activity.text}</p>
-                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                {activities.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No recent activity</div>
+                ) : (
+                  activities.map((activity, index) => (
+                    <div key={index} className="flex items-start gap-3">
+                      <Bell className="h-5 w-5 text-primary mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm">{activity.text}</p>
+                        <p className="text-xs text-muted-foreground">{activity.time}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

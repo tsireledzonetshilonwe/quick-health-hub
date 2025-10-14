@@ -1,10 +1,6 @@
 // Simple fetch-based API client for auth and prescriptions
 // Use Vite env var VITE_API_BASE if provided, otherwise default to relative paths
-export const API_BASE =
-  (import.meta.env as any).VITE_API_BASE ??
-  ((typeof window !== "undefined" && window.location.hostname === "localhost")
-    ? "http://localhost:8080"
-    : "");
+export const API_BASE = (import.meta.env as any).VITE_API_BASE ?? "";
 
 type SignupPayload = {
   email: string;
@@ -27,6 +23,7 @@ export async function signup(payload: SignupPayload) {
 }
 
 export async function login(payload: LoginPayload) {
+  // Send the login payload as { email, password } to match AuthRequest DTO on the server
   return request(`/api/auth/login`, { method: "POST", body: JSON.stringify(payload) }) as Promise<AuthResponse>;
 }
 
@@ -38,6 +35,16 @@ export type PrescriptionDTO = {
   instructions?: string;
   issuedAt: string; // ISO string, e.g. "2025-10-14T12:00:00Z"
   expiresAt?: string; // ISO string
+  status?: string;
+};
+
+// Minimal user type used by auth endpoints
+export type UserDTO = {
+  id?: number;
+  fullName: string;
+  email: string;
+  phone?: string;
+  avatar?: string;
 };
 
 async function request(path: string, options: RequestInit = {}) {
@@ -93,7 +100,7 @@ export async function deletePrescription(id: number): Promise<void> {
 // Appointments
 export type AppointmentDTO = {
   id?: number;
-  userId: number;
+  userId?: number;
   doctor: string;
   specialty: string;
   startTime: string; // ISO string
@@ -146,75 +153,6 @@ export async function health() {
 }
 
 // Doctors (list for selection)
-export type DoctorDTO = {
-  id?: string;
-  fullName: string;
-  specialty?: string;
-};
+// (doctors and user/profile endpoints removed — backend exposes only auth, contact, appointments, prescriptions, and health)
 
-export async function getDoctors() {
-  const candidates = [`/api/doctors`, `/doctors`, `/api/doctor`, `/doctor`, `/api/v1/doctors`, `/v1/doctors`, `/api/providers`, `/providers`];
-  for (const p of candidates) {
-    try {
-      const res = await request(p, { method: "GET" }) as DoctorDTO[];
-      if (res && Array.isArray(res)) return res;
-    } catch (e: any) {
-      if (e?.status && e.status !== 404) throw e;
-      // else continue
-    }
-  }
-  return request(`/api/doctors`, { method: "GET" }) as Promise<DoctorDTO[]>;
-}
-
-// Profile
-export type UserDTO = {
-  id?: number;
-  fullName: string;
-  email: string;
-  phone?: string;
-  avatar?: string;
-};
-
-export async function getProfile() {
-  return request(`/api/auth/me`, { method: "GET" }) as Promise<UserDTO>;
-}
-
-export async function updateProfile(dto: { fullName: string; phone?: string; }) {
-  return request(`/api/auth/me`, { method: "PUT", body: JSON.stringify(dto) }) as Promise<UserDTO>;
-}
-
-// Upload avatar (multipart/form-data)
-export async function uploadAvatar(file: File) {
-  const form = new FormData();
-  form.append("file", file);
-
-  const headers: Record<string, string> = {};
-  // read xsrf cookie if available
-  const getCookie = (name: string) => {
-    if (typeof document === "undefined") return null;
-    const pairs = document.cookie.split(/;\s*/);
-    for (const p of pairs) {
-      const [k, ...v] = p.split("=");
-      if (k === name) return decodeURIComponent(v.join("="));
-    }
-    return null;
-  };
-  const xsrf = getCookie("XSRF-TOKEN") || getCookie("X-XSRF-TOKEN");
-  if (xsrf) headers["X-XSRF-TOKEN"] = xsrf;
-
-  const res = await fetch(`${API_BASE}/api/auth/me/avatar`, {
-    method: "POST",
-    credentials: "include",
-    headers: Object.keys(headers).length ? headers : undefined,
-    body: form,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    const err: any = new Error(text || res.statusText);
-    err.status = res.status;
-    throw err;
-  }
-
-  return (await res.json()) as { url: string };
-}
+// (avatar upload removed)
