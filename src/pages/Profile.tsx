@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,10 +14,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const Profile = () => {
   const { user, refreshProfile, updateProfile, initialized } = useAuth();
   const navigate = useNavigate();
-  const fileRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<UserDTO>({ fullName: user?.fullName || "", email: user?.email || "", phone: "" });
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const sanitizeImageSrc = (src?: string) => {
+    if (!src) return undefined;
+    if (/^(https?:\/\/|\/|data:image\/.+;base64,)/i.test(src)) return src;
+    return undefined;
+  };
 
   useEffect(() => {
     if (!initialized) return;
@@ -33,15 +36,12 @@ const Profile = () => {
     setSaving(true);
     try {
       await updateProfile({ fullName: profile.fullName || "", phone: profile.phone });
-      toast.success("Profile updated (saved locally)");
     } catch (e: any) {
       toast.error(e?.message || "Failed to update profile");
     } finally {
       setSaving(false);
     }
   };
-  const triggerFile = () => fileRef.current?.click();
-
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -57,21 +57,15 @@ const Profile = () => {
                   <div>
                     <Label>Avatar</Label>
                       <div className="mt-2 flex items-center gap-4">
-                      <Avatar>
-                        {profile.avatar ? (
-                          <AvatarImage src={profile.avatar} alt={profile.fullName || "User"} />
-                        ) : (
-                          <AvatarFallback>{(profile.fullName || "U").slice(0, 1)}</AvatarFallback>
-                        )}
-                      </Avatar>
-                      <div className="space-y-2">
-                        <input ref={fileRef} type="file" accept="image/*" className="hidden" />
-                        <div className="flex gap-2">
-                          <Button variant="outline" disabled>Upload (unsupported)</Button>
-                          <Button variant="ghost" disabled>Remove (unsupported)</Button>
-                        </div>
+                        <Avatar>
+                          {sanitizeImageSrc(profile.avatar) ? (
+                            <AvatarImage src={sanitizeImageSrc(profile.avatar)} alt={profile.fullName || "User"} />
+                          ) : (
+                            <AvatarFallback>{(profile.fullName || "U").slice(0, 1)}</AvatarFallback>
+                          )}
+                        </Avatar>
                       </div>
-                    </div>
+                    
                   </div>
 
                   <div className="flex-1">

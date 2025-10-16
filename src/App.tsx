@@ -13,6 +13,11 @@ import Prescriptions from "./pages/Prescriptions";
 import Contact from "./pages/Contact";
 import Profile from "./pages/Profile";
 import ProfileButton from "@/components/ProfileButton";
+import AdminGuard from "./pages/admin/AdminGuard";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminUsersPage from "./pages/admin/Users";
+import AdminAppointmentsPage from "./pages/admin/Appointments";
+import AdminPrescriptionsPage from "./pages/admin/Prescriptions";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +37,12 @@ const App = () => (
           <Route path="/prescriptions" element={<Prescriptions />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
+            <Route index element={<AdminUsersPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="appointments" element={<AdminAppointmentsPage />} />
+            <Route path="prescriptions" element={<AdminPrescriptionsPage />} />
+          </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

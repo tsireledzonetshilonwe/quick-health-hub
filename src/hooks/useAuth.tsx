@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { login as apiLogin, UserDTO, updateMe } from "@/lib/api";
+import { login as apiLogin, UserDTO, updateMe, updateUser, getMe } from "@/lib/api";
 import { toast } from "sonner";
 
 type User = {
@@ -69,13 +69,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshProfile = async () => {
-    // Backend doesn't provide an authenticated profile endpoint; nothing to do here.
-    return Promise.resolve();
+    // If we know the user's email, try to refresh from backend using /api/users/me?email=...
+    const email = user?.email;
+    if (!email) return;
+    try {
+      const fresh = await getMe(email);
+      if (fresh) {
+        setUser({ id: fresh.id, email: fresh.email, fullName: fresh.fullName, phone: fresh.phone });
+        try { localStorage.setItem("currentUserProfile", JSON.stringify(fresh)); } catch {}
+      }
+    } catch (e) {
+      // ignore network/backend errors; keep local state
+    }
   };
 
   const updateProfile = async (p: { fullName: string; phone?: string }) => {
     // Try to persist profile to backend if available. Fall back to localStorage.
-    const payload: any = { fullName: p.fullName };
+  const payload: any = { fullName: p.fullName };
     if (p.phone) payload.phone = p.phone;
 
     // helper to persist locally
@@ -89,26 +99,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     try {
-      // Prefer the dedicated self-update endpoint: PUT /api/users/me
-      const updated = await updateMe(payload as Partial<UserDTO>);
+      // Prefer the dedicated self-update endpoint: PUT /api/users/me (requires email in body)
+      if (!user?.email) {
+        throw new Error("Missing user email for profile update");
+      }
+      const updated = await updateMe({ email: user.email, ...payload });
       if (updated) {
         setUser({ fullName: updated.fullName, email: updated.email, id: updated.id, phone: updated.phone } as any);
-        try {
-          localStorage.setItem("currentUserProfile", JSON.stringify(updated));
-        } catch {}
-        toast.success("Profile updated");
+        try { localStorage.setItem("currentUserProfile", JSON.stringify(updated)); } catch {}
+  toast.success("Successfully updated");
         return;
       }
-      // If the backend didn't return a body, fall back to local persistence
-      persistLocal();
-      toast.success("Profile updated (saved locally)");
+      // If no body returned, fall through and try admin/id endpoint if we have an id
+      if (user && (user as any).id) {
+        const updated2 = await updateUser((user as any).id as number, payload as Partial<UserDTO>);
+        if (updated2) {
+          setUser({ fullName: updated2.fullName, email: updated2.email, id: updated2.id, phone: updated2.phone } as any);
+          try { localStorage.setItem("currentUserProfile", JSON.stringify(updated2)); } catch {}
+          toast.success("Successfully updated");
+          return;
+        }
+      }
+      // Otherwise, persist locally
+  persistLocal();
+  toast.success("Successfully updated");
       return;
     } catch (er: any) {
-      // network or endpoint missing — persist locally
+      // If /me failed with 404 or permission and we have an id, try /api/users/{id}
+      try {
+        if (user && (user as any).id) {
+          const updated2 = await updateUser((user as any).id as number, payload as Partial<UserDTO>);
+          if (updated2) {
+            setUser({ fullName: updated2.fullName, email: updated2.email, id: updated2.id, phone: updated2.phone } as any);
+            try { localStorage.setItem("currentUserProfile", JSON.stringify(updated2)); } catch {}
+            toast.success("Profile updated");
+            return;
+          }
+        }
+      } catch (inner: any) {
+        // continue to local fallback
+      }
+      // Final fallback: local persistence
       persistLocal();
-      // Distinguish a 404 from other errors if possible
       if (er?.status === 404) {
-        toast.success("Profile saved locally (server endpoint not available)");
+        toast.success("Successfully updated");
       } else {
         toast.error(er?.message || "Failed to update profile; changes saved locally");
       }

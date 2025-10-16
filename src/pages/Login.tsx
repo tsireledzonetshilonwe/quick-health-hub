@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Activity, Eye, EyeOff, Loader2 } from "lucide-react";
 import { login } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const Login = () => {
     email: "",
     password: "",
   });
+  const [accountType, setAccountType] = useState<"patient" | "admin">("patient");
 
   const { signIn } = useAuth();
 
@@ -31,9 +33,9 @@ const Login = () => {
         setLoading(false);
         return;
       }
-      await signIn(email, formData.password);
-      toast.success("Login successful! Redirecting...");
-      navigate("/dashboard");
+  await signIn(email, formData.password);
+  toast.success("Login successful! Redirecting...");
+  navigate(accountType === "admin" ? "/admin" : "/dashboard");
     } catch (err: any) {
       if (err?.status === 401) {
         toast.error("Invalid email or password");
@@ -60,6 +62,19 @@ const Login = () => {
 
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="accountType">I am a</Label>
+              <Select value={accountType} onValueChange={(v) => setAccountType(v as any)}>
+                <SelectTrigger id="accountType">
+                  <SelectValue placeholder="Select account type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="patient">Patient</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
                 <Input

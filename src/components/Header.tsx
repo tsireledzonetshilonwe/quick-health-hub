@@ -17,6 +17,13 @@ const Header = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
+  // Only allow http(s), absolute root path, or data URLs for images
+  const sanitizeImageSrc = (src?: string) => {
+    if (!src) return undefined;
+    if (/^(https?:\/\/|\/|data:image\/.+;base64,)/i.test(src)) return src;
+    return undefined;
+  };
+
   const handleLogout = () => {
     signOut();
     navigate("/");
@@ -59,11 +66,12 @@ const Header = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="px-1">
                     <Avatar>
-                      {((user as any).avatar) ? (
-                        <AvatarImage src={(user as any).avatar} alt={user.fullName || "User"} />
-                      ) : (
-                        <AvatarImage src="/placeholder.svg" alt={user.fullName || "User"} />
-                      )}
+                      {(() => {
+                        const safe = sanitizeImageSrc((user as any).avatar);
+                        return (
+                          <AvatarImage src={safe || "/placeholder.svg"} alt={user.fullName || "User"} />
+                        );
+                      })()}
                       <AvatarFallback>{(user.fullName || "U").slice(0, 1)}</AvatarFallback>
                     </Avatar>
                   </Button>
