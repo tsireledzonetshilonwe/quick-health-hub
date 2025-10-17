@@ -5,16 +5,29 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Pill, Calendar, User } from "lucide-react";
-import { getPrescriptions, PrescriptionDTO, getPrescription, API_BASE } from "@/lib/api";
+import { Pill, Calendar, User, Plus } from "lucide-react";
+import { getPrescriptions, PrescriptionDTO, getPrescription, createPrescription, API_BASE } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const Prescriptions = () => {
   const navigate = useNavigate();
   const [prescriptions, setPrescriptions] = useState<PrescriptionDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newPrescription, setNewPrescription] = useState({
+    medication: "",
+    dosage: "",
+    instructions: "",
+    issuedAt: new Date().toISOString().split('T')[0],
+    expiresAt: "",
+  });
 
   const { user, initialized } = useAuth();
 
@@ -50,6 +63,34 @@ const Prescriptions = () => {
     load();
   }, [navigate, user, initialized]);
 
+  const handleCreate = async () => {
+    if (!newPrescription.medication || !newPrescription.dosage) {
+      toast.error("Medication and dosage are required");
+      return;
+    }
+    setCreating(true);
+    try {
+      const dto: PrescriptionDTO = {
+        userId: (user as any)?.id || 0,
+        medication: newPrescription.medication,
+        dosage: newPrescription.dosage,
+        instructions: newPrescription.instructions || undefined,
+        issuedAt: newPrescription.issuedAt || new Date().toISOString(),
+        expiresAt: newPrescription.expiresAt || undefined,
+        status: "Active",
+      };
+      await createPrescription(dto);
+      toast.success("Prescription created");
+      setDialogOpen(false);
+      setNewPrescription({ medication: "", dosage: "", instructions: "", issuedAt: new Date().toISOString().split('T')[0], expiresAt: "" });
+      await load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create prescription");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
@@ -68,9 +109,81 @@ const Prescriptions = () => {
       <Header />
 
       <main className="flex-1 container py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">My Prescriptions</h1>
-          <p className="text-muted-foreground">View and manage your medication prescriptions</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">My Prescriptions</h1>
+            <p className="text-muted-foreground">View and manage your medication prescriptions</p>
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Prescription
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Prescription</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="medication">Medication *</Label>
+                  <Input
+                    id="medication"
+                    placeholder="e.g., Amoxicillin"
+                    value={newPrescription.medication}
+                    onChange={(e) => setNewPrescription({ ...newPrescription, medication: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dosage">Dosage *</Label>
+                  <Input
+                    id="dosage"
+                    placeholder="e.g., 500mg twice daily"
+                    value={newPrescription.dosage}
+                    onChange={(e) => setNewPrescription({ ...newPrescription, dosage: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="instructions">Instructions</Label>
+                  <Textarea
+                    id="instructions"
+                    placeholder="Take with food"
+                    value={newPrescription.instructions}
+                    onChange={(e) => setNewPrescription({ ...newPrescription, instructions: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="issuedAt">Issued Date</Label>
+                    <Input
+                      id="issuedAt"
+                      type="date"
+                      value={newPrescription.issuedAt}
+                      onChange={(e) => setNewPrescription({ ...newPrescription, issuedAt: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expiresAt">Expires Date</Label>
+                    <Input
+                      id="expiresAt"
+                      type="date"
+                      value={newPrescription.expiresAt}
+                      onChange={(e) => setNewPrescription({ ...newPrescription, expiresAt: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={creating}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreate} disabled={creating}>
+                  {creating ? "Creating..." : "Create"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <div className="mb-6 flex gap-4">
