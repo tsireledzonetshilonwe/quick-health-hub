@@ -36,6 +36,8 @@ export type PrescriptionDTO = {
   issuedAt: string; // ISO string, e.g. "2025-10-14T12:00:00Z"
   expiresAt?: string; // ISO string
   status?: string;
+  patientName?: string;
+  patientEmail?: string;
 };
 
 // Minimal user type used by auth endpoints
@@ -108,6 +110,8 @@ export type AppointmentDTO = {
   endTime?: string;  // ISO string
   reason?: string;
   status?: string;   // Only if present in backend
+  patientName?: string;
+  patientEmail?: string;
 };
 
 export type AppointmentCreateDTO = {
@@ -200,6 +204,7 @@ export async function health() {
 export type AdminUser = UserDTO & { active?: boolean; roles?: string[] };
 export type AdminAppointment = AppointmentDTO;
 export type AdminPrescription = PrescriptionDTO;
+export type AdminContactMessage = ContactMessageDTO;
 
 // Admin - Users
 export async function adminGetUsers() {
@@ -262,4 +267,17 @@ export async function adminUpdatePrescription(id: number, dto: Partial<AdminPres
 
 export async function adminDeletePrescription(id: number) {
   await request(`/api/admin/prescriptions/${id}`, { method: "DELETE" });
+}
+
+// Admin - Contact Messages
+export async function adminGetContactMessages() {
+  return request(`/api/admin/contact-messages`, { method: "GET" }) as Promise<AdminContactMessage[]>;
+}
+
+export async function adminGetContactMessage(id: number) {
+  return request(`/api/admin/contact-messages/${id}`, { method: "GET" }) as Promise<AdminContactMessage>;
+}
+
+export async function adminDeleteContactMessage(id: number) {
+  await request(`/api/admin/contact-messages/${id}`, { method: "DELETE" });
 }

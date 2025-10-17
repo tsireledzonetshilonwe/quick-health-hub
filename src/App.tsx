@@ -18,6 +18,7 @@ import AdminLayout from "./pages/admin/AdminLayout";
 import AdminUsersPage from "./pages/admin/Users";
 import AdminAppointmentsPage from "./pages/admin/Appointments";
 import AdminPrescriptionsPage from "./pages/admin/Prescriptions";
+import AdminMessagesPage from "./pages/admin/Messages";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="appointments" element={<AdminAppointmentsPage />} />
             <Route path="prescriptions" element={<AdminPrescriptionsPage />} />
+            <Route path="messages" element={<AdminMessagesPage />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { adminGetPrescriptions, adminUpdatePrescription, adminDeletePrescription, AdminPrescription } from "@/lib/api";
+import { adminGetPrescriptions, adminUpdatePrescription, adminGetPrescription, AdminPrescription } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 export default function AdminPrescriptionsPage() {
   const [items, setItems] = useState<AdminPrescription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -23,23 +24,22 @@ export default function AdminPrescriptionsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const revoke = async (id: number) => {
+  const updateStatus = async (id: number, status: string) => {
     try {
-      await adminUpdatePrescription(id, { status: 'REVOKED' as any });
-      toast.success('Prescription revoked');
-      await load();
+      setSavingId(id);
+      const existing = await adminGetPrescription(id);
+      await adminUpdatePrescription(id, { ...existing, status });
+      toast.success('Status updated');
+      // Optimistic update
+      setItems((prev) => prev.map((p) => p.id === id ? { ...p, status } : p));
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to revoke');
-    }
-  };
-
-  const removeItem = async (id: number) => {
-    try {
-      await adminDeletePrescription(id);
-      toast.success('Prescription deleted');
-      await load();
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to delete');
+      if (e?.status === 401) {
+        toast.error('Unauthorized. Please log in as admin.');
+      } else {
+        toast.error(e?.message || 'Failed to update status');
+      }
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -56,23 +56,40 @@ export default function AdminPrescriptionsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr>
+                <th className="text-left p-2">Patient Name</th>
+                <th className="text-left p-2">Patient Email</th>
                 <th className="text-left p-2">Medication</th>
                 <th className="text-left p-2">Dosage</th>
                 <th className="text-left p-2">Issued</th>
                 <th className="text-left p-2">Status</th>
-                <th className="p-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map(p => (
                 <tr key={p.id} className="border-t">
+                  <td className="p-2">{p.patientName || "Unknown"}</td>
+                  <td className="p-2">{p.patientEmail || "Unknown"}</td>
                   <td className="p-2">{p.medication}</td>
                   <td className="p-2">{p.dosage}</td>
                   <td className="p-2">{new Date(p.issuedAt).toLocaleDateString()}</td>
-                  <td className="p-2">{p.status}</td>
-                  <td className="p-2 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => revoke(p.id!)}>Revoke</Button>
-                    <Button size="sm" variant="destructive" onClick={() => removeItem(p.id!)}>Delete</Button>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={p.status || 'Active'}
+                        onValueChange={(val) => updateStatus(p.id!, val)}
+                        disabled={savingId === p.id}
+                      >
+                        <SelectTrigger className="w-[160px]">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Active">Active</SelectItem>
+                          <SelectItem value="Revoked">Revoked</SelectItem>
+                          <SelectItem value="Expired">Expired</SelectItem>
+                          <SelectItem value="Cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </td>
                 </tr>
               ))}

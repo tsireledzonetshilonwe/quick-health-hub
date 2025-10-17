@@ -1,0 +1,76 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  password      String
+  fullName      String
+  phone         String?
+  roles         String         @default("PATIENT") // Comma-separated roles: "PATIENT,ADMIN"
+  active        Boolean        @default(true)
+  gender        String?
+  dateOfBirth   DateTime?
+  address       String?
+  avatar        String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  appointments  Appointment[]
+  prescriptions Prescription[]
+  
+  @@map("users")
+}
+
+model Appointment {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  doctor          String
+  specialty       String
+  appointmentDate DateTime
+  endTime         DateTime?
+  reason          String?
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("appointments")
+}
+
+model Prescription {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  medication   String
+  dosage       String
+  instructions String?
+  issuedAt     DateTime
+  expiresAt    DateTime?
+  status       String    @default("Active")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("prescriptions")
+}
+
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+  
+  @@map("contact_messages")
+}
